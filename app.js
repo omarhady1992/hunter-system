@@ -6,6 +6,9 @@
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const ST_KEY = 'hunter.state', CACHE = 'hunter.cache', CFG = 'hunter.cfg';
   const TRACKER_CFG = 'fitTracker.cfg', TRACKER_CACHE = 'fitTracker.cache';
+  const WEB = /github\.io$/.test(location.hostname);
+  const TRACKER_URL = 'https://omarhady1992.github.io/calisthenics-tracker/';
+  const TOKEN_URL = 'https://github.com/settings/personal-access-tokens/new';
   const STAT_NAMES = { STR: 'Strength', AGI: 'Agility', VIT: 'Vitality', PER: 'Sense', INT: 'Intelligence' };
   const STAT_SRC = { STR: 'Pull, Push, Legs, Bosses', AGI: 'EMOM, football', VIT: 'Protein days, weight', PER: 'Skills, posture, balance', INT: 'Logging' };
   const fmtD = s => { const d = new Date(s + 'T12:00:00'); return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }); };
@@ -16,7 +19,13 @@
   const save = () => ls(ST_KEY, st);
 
   // ---------- data ----------
-  function cfg() { return ls(CFG) || ls(TRACKER_CFG); }
+  function cfg() { return ls(CFG) || (WEB ? ls(TRACKER_CFG) : null); }
+  async function fetchLive(c) {
+    const url = 'https://api.github.com/repos/' + encodeURIComponent(c.owner || 'omarhady1992') + '/' + encodeURIComponent(c.repo || 'fitness-data') + '/contents/' + (c.path || 'data.json') + '?t=' + Date.now();
+    const r = await fetch(url, { headers: { Authorization: 'Bearer ' + c.token, Accept: 'application/vnd.github.raw+json' }, cache: 'no-store' });
+    if (!r.ok) { const e = new Error('GitHub ' + r.status); e.status = r.status; throw e; }
+    return r.json();
+  }
   function setSync(t, c) { const s = $('syncState'); s.textContent = t; s.className = 'sync ' + (c || ''); }
   async function load() {
     const qp = new URLSearchParams(location.search).get('data');
@@ -27,13 +36,11 @@
     if (c && c.token) {
       setSync('syncing…');
       try {
-        const url = 'https://api.github.com/repos/' + encodeURIComponent(c.owner || 'omarhady1992') + '/' + encodeURIComponent(c.repo || 'fitness-data') + '/contents/' + (c.path || 'data.json') + '?t=' + Date.now();
-        const r = await fetch(url, { headers: { Authorization: 'Bearer ' + c.token, Accept: 'application/vnd.github.raw+json' }, cache: 'no-store' });
-        if (!r.ok) throw new Error('GitHub ' + r.status);
-        data = await r.json(); ls(CACHE, data); setSync('synced ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), 'ok'); return true;
+        data = await fetchLive(c); ls(CACHE, data); setSync('synced ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), 'ok'); return true;
       } catch (e) { setSync(navigator.onLine ? 'sync failed' : 'offline', 'err'); }
     }
-    const cached = ls(CACHE) || ls(TRACKER_CACHE);
+    if (!c) setSync('not linked');
+    const cached = ls(CACHE) || (WEB ? ls(TRACKER_CACHE) : null);
     if (cached) { data = cached; if (!c) setSync('cached', ''); return true; }
     return false;
   }
@@ -270,17 +277,36 @@
     h += '<div class="win"><div class="wt"><span>LEVELS & RANKS</span></div><p class="muted" style="margin-top:0">Level n to n+1 costs 100 + 20 × n XP (Level 1→2: 120, Level 20→21: 500). Each level gives 3 stat points. Ranks need levels and real milestones:</p><table><tr><th>Rank</th><th>Needs</th></tr>' + E.RANKS.map(r => '<tr><td><b>' + r.r + '</b></td><td style="color:var(--text);text-align:left">' + esc(r.label) + '</td></tr>').join('') + '</table></div>';
     h += '<div class="win"><div class="wt"><span>RULES</span></div><ul class="muted" style="padding-left:18px;margin:0"><li>Keep the cycle order: Pull, Push, Legs, EMOM, Skills.</li><li>No more than 3 training days in a row; 2 rest days a week.</li><li>Two rest days back to back only with a reason. A 3rd in a row opens the Penalty Zone: 100 push-ups in 4 sets plus a 15-minute walk. Clearing it earns XP; nothing is taken away.</li><li>Weight: home and clinic scales are separate series and never compared. Milestones count from 75.5 kg at home or from the first clinic reading.</li><li>Bosses are the 4-weekly benchmark tests: max push-ups, max pull-ups, longest handstand hold.</li><li>Stats grow from what you do (STR from Pull, Push, Legs; AGI from EMOM and football; VIT from protein days and weight; SENSE from Skills and posture; INT from logging) plus the points you place.</li></ul>' +
       '<div class="row" style="margin-top:14px"><button class="btn red" id="pvPZ">Preview the Penalty Zone</button><button class="btn ghost" id="exp">Back up my ticks</button><button class="btn ghost" id="imp">Restore ticks</button></div></div>';
-    h += '<div class="win"><div class="wt"><span>DATA LINK</span></div><p class="muted" style="margin-top:0">' + (cfg() ? 'Reading your private fitness-data log with the key saved on this phone by the Calisthenics Tracker. New logs show up each time you open the app.' : 'No key on this phone yet. Open the Calisthenics Tracker once on this phone and connect it; this app then uses the same key.') + '</p><a class="btn ghost" style="display:inline-block;text-decoration:none" href="../calisthenics-tracker/">Open Calisthenics Tracker</a></div>';
+    h += '<div class="win"><div class="wt"><span>DATA LINK</span></div><p class="muted" style="margin-top:0">' + (ls(CFG) ? 'Linked to your private fitness-data log with the key saved in this app. New logs show up each time you open it or tap ⟳.' : cfg() ? 'Reading your private fitness-data log with the key the Calisthenics Tracker saved in this browser. New logs show up each time you open the app.' : 'Not linked.') + '</p><div class="row">' + (ls(CFG) ? '<button class="btn ghost" id="unlink">Remove key</button>' : '') + '<a class="btn ghost" style="display:inline-block;text-decoration:none" target="_blank" rel="noopener" href="' + TRACKER_URL + '">Open Calisthenics Tracker</a></div></div>';
     const el = $('v-codex'); el.innerHTML = h;
+    const ul = $('unlink'); if (ul) ul.onclick = () => { if (confirm('Remove the GitHub key from this app? Your ticks stay.')) { localStorage.removeItem(CFG); localStorage.removeItem(CACHE); location.reload(); } };
     $('pvPZ').onclick = () => penaltyZone('preview');
     $('exp').onclick = () => { const blob = new Blob([JSON.stringify(st, null, 1)], { type: 'application/json' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'hunter-state-' + R.today + '.json'; a.click(); };
     $('imp').onclick = () => { const i = document.createElement('input'); i.type = 'file'; i.accept = 'application/json'; i.onchange = () => { const f = i.files[0]; if (!f) return; f.text().then(t => { try { st = Object.assign(st, JSON.parse(t)); save(); refresh(); toast('NOTIFICATION', 'Ticks restored.'); } catch (e) { toast('WARNING', 'That file could not be read.', 'red'); } }); }; i.click(); };
   }
 
   function connectScreen() {
-    const h = '<div class="win"><div class="wt"><span>NOTIFICATION</span></div><p>The System cannot see your logs on this phone yet.</p><p class="muted">Open the Calisthenics Tracker on this phone and connect it once. This app shares its key automatically, since both live at omarhady1992.github.io. Or paste a read-only GitHub key for the fitness-data repo here.</p><a class="btn" style="display:inline-block;text-decoration:none;margin-bottom:12px" href="../calisthenics-tracker/">Open Calisthenics Tracker</a><label class="f">GitHub key (Contents: Read)</label><input type="password" id="tok" autocomplete="off"><div style="margin-top:10px"><button class="btn gold" id="tokGo">Link</button></div></div>';
+    const steps = '<ol class="muted" style="padding-left:18px;text-align:left">' +
+      '<li>On GitHub open <b>Settings → Developer settings → Fine-grained tokens → Generate new token</b> (<a style="color:var(--soft)" target="_blank" rel="noopener" href="' + TOKEN_URL + '">open it</a>).</li>' +
+      '<li>Name it "Hunter System" and pick an expiry.</li>' +
+      '<li>Repository access: <b>Only select repositories → fitness-data</b>.</li>' +
+      '<li>Permissions → Repository → <b>Contents: Read-only</b>. Nothing else.</li>' +
+      '<li>Generate, copy the token (starts with github_pat_) and paste it below.</li></ol>';
+    const h = '<div class="win"><div class="wt"><span>NOTIFICATION</span></div><p>Link the System to your logs.</p><p class="muted">The app reads your private fitness-data log, so it needs a read-only GitHub key once. The key stays on this device only.' + (WEB ? ' In this browser you can also just open the Calisthenics Tracker once; the System then uses its key.' : '') + '</p>' + steps +
+      (WEB ? '<a class="btn ghost" style="display:inline-block;text-decoration:none;margin-bottom:6px" href="' + TRACKER_URL + '">Open Calisthenics Tracker</a>' : '') +
+      '<label class="f">GitHub key (Contents: Read-only)</label><input type="password" id="tok" autocomplete="off" placeholder="github_pat_…"><div class="muted" id="tokMsg" style="min-height:1.4em;margin-top:6px"></div><div style="margin-top:6px"><button class="btn gold" id="tokGo">Link</button></div></div>';
     $('v-status').innerHTML = h;
-    $('tokGo').onclick = async () => { const t = $('tok').value.trim(); if (!t) return; ls(CFG, { token: t, owner: 'omarhady1992', repo: 'fitness-data', path: 'data.json' }); if (await load()) { refresh(); } else { toast('WARNING', 'That key could not read fitness-data.', 'red'); } };
+    $('tokGo').onclick = async () => {
+      const t = $('tok').value.trim(); const msg = $('tokMsg'); if (!t) { msg.textContent = 'Paste the key first.'; return; }
+      const c = { token: t, owner: 'omarhady1992', repo: 'fitness-data', path: 'data.json' };
+      msg.textContent = 'Checking the key…';
+      try {
+        data = await fetchLive(c); ls(CFG, c); ls(CACHE, data); setSync('synced', 'ok'); msg.textContent = ''; refresh();
+      } catch (e) {
+        msg.textContent = e.status === 401 ? 'GitHub rejected that key (401). Check it was copied in full and has not expired.' : e.status === 404 || e.status === 403 ? 'That key cannot see fitness-data (' + e.status + '). Give it access to the fitness-data repo with Contents: Read-only.' : 'Could not reach GitHub. Check the connection and try again.';
+        $('tok').classList.add('shake'); setTimeout(() => $('tok').classList.remove('shake'), 500);
+      }
+    };
   }
 
   // ---------- boot ----------
@@ -292,5 +318,5 @@
     const ok = await load();
     if (ok) refresh(); else connectScreen();
   })();
-  if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => { /* offline install optional */ });
+  if ('serviceWorker' in navigator && WEB) navigator.serviceWorker.register('sw.js').catch(() => { /* offline install optional */ });
 })();

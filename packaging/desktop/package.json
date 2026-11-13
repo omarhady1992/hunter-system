@@ -1,0 +1,51 @@
+{
+  "name": "hunter-system",
+  "productName": "Hunter System",
+  "version": "1.0.0",
+  "description": "Omar's training journey as a levelling game",
+  "author": "Omar Hady",
+  "main": "app/main.js",
+  "build": {
+    "appId": "io.github.omarhady1992.hunter",
+    "productName": "Hunter System",
+    "files": [
+      "app/**/*"
+    ],
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png",
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "Hunter-System-Setup-${version}.exe",
+      "shortcutName": "Hunter System"
+    },
+    "portable": {
+      "artifactName": "Hunter-System-Portable-${version}.exe"
+    }
+  },
+  "devDependencies": {
+    "electron": "^33.4.11",
+    "electron-builder": "^25.1.8"
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "appId": "io.github.omarhady1992.hunter",
+  "appName": "Hunter System",
+  "webDir": "www",
+  "android": { "backgroundColor": "#040a18" }
+}
